@@ -44,28 +44,97 @@ function App() {
     }
   }, []);
 
+
   const fetchComplaints = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/complaints`, { cache: 'no-store' });
+      const response = await fetch(
+        `${API_BASE_URL}/api/complaints?_=${Date.now()}`,
+        {
+          method: 'GET',
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        }
+      );
+
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Unable to load complaints.');
-      const list = Array.isArray(data.complaints) ? data.complaints : [];
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to load complaints.');
+      }
+
+      const list = Array.isArray(data.complaints)
+        ? data.complaints
+        : [];
+
       setComplaints(list);
+
       setSelectedComplaintId((currentId) =>
         list.some((item) => item.referenceId === currentId)
           ? currentId
-          : (list[0]?.referenceId || '')
+          : list[0]?.referenceId || ''
       );
+
+      setComplaintError('');
     } catch (error) {
       console.error('Error fetching complaints:', error);
-      setComplaintError(error.message || 'Unable to refresh complaints.');
+      setComplaintError(
+        error.message || 'Unable to refresh complaints.'
+      );
     }
   }, []);
 
+  const handleComplaintSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!complaintForm.description.trim()) {
+      setComplaintError('Please enter a complaint description.');
+      return;
+    }
+
+    setIsSavingComplaint(true);
+    setComplaintError('');
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/complaints`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            customerName: complaintForm.customerName,
+            customerContact: complaintForm.customerContact,
+            description: complaintForm.description,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to save complaint.');
+      }
+
+      setComplaintForm(emptyComplaint);
+      setComplaintError('');
+
+      await fetchComplaints();
+    } catch (error) {
+      console.error('Error saving complaint:', error);
+      setComplaintError(
+        error.message || 'Unable to save complaint.'
+      );
+    } finally {
+      setIsSavingComplaint(false);
+    }
+  };
+
+
   useEffect(() => {
     fetchBusiness();
-    fetchComplaints();
-  }, [fetchBusiness, fetchComplaints]);
+  }, [fetchBusiness]);
 
   const selectedComplaint = complaints.find(
     (complaint) => complaint.referenceId === selectedComplaintId
@@ -74,92 +143,56 @@ function App() {
   const handleQuestionSubmit = async (messageText) => {
     const trimmed = messageText.trim();
     if (!trimmed || isLoading) return;
-    setMessages((current) => [...current, { id: Date.now(), sender: 'customer', text: trimmed }]);
+
+    setMessages((current) => [
+      ...current,
+      { id: Date.now(), sender: 'customer', text: trimmed },
+    ]);
     setInput('');
     setIsLoading(true);
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed }),
       });
+
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Unable to answer your question.');
-      setMessages((current) => [...current, {
-        id: Date.now() + 1,
-        sender: 'bot',
-        text: data.reply || 'I am not sure how to answer that yet.',
-      }]);
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to answer your question.');
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: data.reply || 'I am not sure how to answer that yet.',
+        },
+      ]);
+
       if (data.type === 'complaint-prompt') {
-        setComplaintForm((current) => ({ ...current, description: trimmed }));
+        setComplaintForm((current) => ({
+          ...current,
+          description: trimmed,
+        }));
       }
     } catch (error) {
       console.error('Chat request failed:', error);
-      setMessages((current) => [...current, {
-        id: Date.now() + 2,
-        sender: 'bot',
-        text: error.message || 'Sorry, I was unable to answer that right now. Please try again.',
-      }]);
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 2,
+          sender: 'bot',
+          text: error.message || 'Sorry, I was unable to answer that right now. Please try again.',
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleComplaintSubmit = async (event) => {
-    event.preventDefault();
-    if (!complaintForm.description.trim()) {
-      setComplaintError('Please provide a complaint description before submitting.');
-      return;
-    }
-    setComplaintError('');
-    setIsSavingComplaint(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/complaints`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerName: complaintForm.customerName,
-          customerContact: complaintForm.customerContact,
-          description: complaintForm.description,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Unable to record the complaint.');
-      setMessages((current) => [...current, {
-        id: Date.now(),
-        sender: 'bot',
-        text: `Your complaint has been recorded successfully. Reference ID: ${data.referenceId || 'created'}. Its status is Open.`,
-      }]);
-      setComplaintForm({ ...emptyComplaint });
-      await fetchComplaints();
-    } catch (error) {
-      console.error('Complaint submission failed:', error);
-      setComplaintError(error.message || 'The complaint could not be saved. Please try again.');
-    } finally {
-      setIsSavingComplaint(false);
-    }
-  };
-
-  const handleStatusChange = async (complaintId, nextStatus) => {
-    if (!complaintId || isUpdatingStatus) return;
-    setComplaintError('');
-    setIsUpdatingStatus(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/complaints/${complaintId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Unable to update complaint status.');
-      await fetchComplaints();
-    } catch (error) {
-      console.error('Status update failed:', error);
-      setComplaintError(error.message || 'Unable to update complaint status.');
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  };
 
   return (
     <div className="app-shell">
