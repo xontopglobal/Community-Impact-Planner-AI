@@ -23,7 +23,7 @@ function App() {
   const [business, setBusiness] = useState({
     name: 'SmartCare Supply Co.',
     welcome:
-      'Ask me about our products, get recommendations, or submit a complaint.',
+      'Explore our products, discover recommendations, and get customer support.',
   });
 
   const [messages, setMessages] = useState([
@@ -33,6 +33,8 @@ function App() {
       text: 'Hi! I can help with product questions, recommendations, and complaint follow-up.',
     },
   ]);
+
+
 
   const [input, setInput] = useState('');
   const [complaints, setComplaints] = useState([]);
