@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import './App.css';
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  'https://community-impact-planner-ai.onrender.com';
+
+
 const defaultSuggestions = [
   'Which product would you recommend for someone looking for a durable school backpack, and how much does it cost?',
   'I need a backpack under $60 that is good for school.',
@@ -30,7 +35,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchBusiness = async () => {
-    const response = await fetch('http://localhost:4000/api/business');
+    const response = await fetch('https://community-impact-planner-ai.onrender.com');
     const data = await response.json();
     if (data.business) {
       setBusiness(data.business);
@@ -38,7 +43,7 @@ function App() {
   };
 
   const fetchComplaints = async () => {
-    const response = await fetch('http://localhost:4000/api/complaints');
+    const response = await fetch('https://community-impact-planner-ai.onrender.com/api/complaints');
     const data = await response.json();
     if (data.complaints) {
       setComplaints(data.complaints);
@@ -67,7 +72,7 @@ function App() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:4000/api/chat', {
+      const response = await fetch('https://community-impact-planner-ai.onrender.com/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed }),
@@ -111,7 +116,7 @@ function App() {
     setComplaintError('');
 
     try {
-      const response = await fetch('http://localhost:4000/api/complaints', {
+      const response = await fetch(`${API_BASE_URL}https://community-impact-planner-ai.onrender.com/api/complaints`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -143,7 +148,7 @@ function App() {
   };
 
   const handleStatusChange = async (complaintId, nextStatus) => {
-    const response = await fetch(`http://localhost:4000/api/complaints/${complaintId}`, {
+    const response = await fetch(`${API_BASE_URL}https://community-impact-planner-ai.onrender.com/api/complaints/${complaintId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: nextStatus }),
