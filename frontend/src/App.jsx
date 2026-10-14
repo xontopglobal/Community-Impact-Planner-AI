@@ -70,14 +70,22 @@ function App() {
   // Load complaints for the owner dashboard.
   const fetchComplaints = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/complaints`);
-
-      if (!response.ok) {
-        throw new Error('Unable to load complaints.');
-      }
+      const response = await fetch(
+        `${API_BASE_URL}/api/complaints`,
+        { cache: 'no-store' }
+      );
 
       const data = await response.json();
-      const list = data.complaints || [];
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Unable to load complaints.'
+        );
+      }
+
+      const list = Array.isArray(data.complaints)
+        ? data.complaints
+        : [];
 
       setComplaints(list);
 
@@ -90,10 +98,16 @@ function App() {
 
         return list.length > 0 ? list[0].referenceId : '';
       });
+
+      console.log('Complaints refreshed:', list.length);
     } catch (error) {
       console.error('Error fetching complaints:', error);
+      setComplaintError(
+        error.message || 'Unable to refresh complaints.'
+      );
     }
   };
+
 
   // Load initial information and complaints.
   useEffect(() => {
