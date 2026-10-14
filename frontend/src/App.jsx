@@ -260,6 +260,40 @@ function App() {
         }
       );
 
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Unable to update complaint status.'
+        );
+      }
+
+      if (data.complaint) {
+        setComplaints((current) =>
+          current.map((complaint) =>
+            complaint.id === data.complaint.id
+              ? {
+                ...complaint,
+                status: data.complaint.status,
+                updatedAt: data.complaint.updated_at,
+              }
+              : complaint
+          )
+        );
+      }
+
+      await fetchComplaints();
+    } catch (error) {
+      console.error('Status update failed:', error);
+      setComplaintError(
+        error.message || 'Unable to update complaint status.'
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
