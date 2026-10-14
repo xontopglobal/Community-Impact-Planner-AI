@@ -284,9 +284,7 @@ function App() {
             </div>
           </div>
 
-          <div className="welcome-box">
-            <p>{business.welcome}</p>
-          </div>
+      
 
           <div className="suggestions">
             {defaultSuggestions.map((suggestion) => (
