@@ -1,10 +1,11 @@
+
 import { useEffect, useState } from 'react';
 import './App.css';
 
-const API_BASE_URL =
+const API_BASE_URL = (
   import.meta.env.VITE_API_URL ||
-  'https://community-impact-planner-ai.onrender.com';
-
+  'https://community-impact-planner-ai.onrender.com'
+).replace(/\/+$/, '');
 
 const defaultSuggestions = [
   'Which product would you recommend for someone looking for a durable school backpack, and how much does it cost?',
@@ -19,7 +20,12 @@ const emptyComplaint = {
 };
 
 function App() {
-  const [business, setBusiness] = useState({ name: 'SmartCare Supply Co.' });
+  const [business, setBusiness] = useState({
+    name: 'SmartCare Supply Co.',
+    welcome:
+      'Ask me about our products, get recommendations, or submit a complaint.',
+  });
+
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -27,78 +33,136 @@ function App() {
       text: 'Hi! I can help with product questions, recommendations, and complaint follow-up.',
     },
   ]);
+
   const [input, setInput] = useState('');
   const [complaints, setComplaints] = useState([]);
   const [selectedComplaintId, setSelectedComplaintId] = useState('');
   const [complaintForm, setComplaintForm] = useState(emptyComplaint);
   const [complaintError, setComplaintError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingComplaint, setIsSavingComplaint] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
+  // Load business information.
   const fetchBusiness = async () => {
-    const response = await fetch('https://community-impact-planner-ai.onrender.com');
-    const data = await response.json();
-    if (data.business) {
-      setBusiness(data.business);
-    }
-  };
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/business`);
 
-  const fetchComplaints = async () => {
-    const response = await fetch('https://community-impact-planner-ai.onrender.com/api/complaints');
-    const data = await response.json();
-    if (data.complaints) {
-      setComplaints(data.complaints);
-      if (!selectedComplaintId && data.complaints.length > 0) {
-        setSelectedComplaintId(data.complaints[0].referenceId);
+      if (!response.ok) {
+        throw new Error('Unable to load business information.');
       }
+
+      const data = await response.json();
+
+      if (data.business) {
+        setBusiness((current) => ({
+          ...current,
+          ...data.business,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching business:', error);
     }
   };
 
+  // Load complaints for the owner dashboard.
+  const fetchComplaints = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/complaints`);
+
+      if (!response.ok) {
+        throw new Error('Unable to load complaints.');
+      }
+
+      const data = await response.json();
+      const list = data.complaints || [];
+
+      setComplaints(list);
+
+      setSelectedComplaintId((currentId) => {
+        const stillExists = list.some(
+          (complaint) => complaint.referenceId === currentId
+        );
+
+        if (stillExists) return currentId;
+
+        return list.length > 0 ? list[0].referenceId : '';
+      });
+    } catch (error) {
+      console.error('Error fetching complaints:', error);
+    }
+  };
+
+  // Load initial information and complaints.
   useEffect(() => {
     fetchBusiness();
     fetchComplaints();
   }, []);
 
+  // Find the currently selected complaint.
   const selectedComplaint = complaints.find(
-    (complaint) => complaint.referenceId === selectedComplaintId,
+    (complaint) => complaint.referenceId === selectedComplaintId
   );
 
+  // Send a question to SmartCare AI.
   const handleQuestionSubmit = async (messageText) => {
     const trimmed = messageText.trim();
-    if (!trimmed) return;
 
-    const userMessage = { id: Date.now(), sender: 'customer', text: trimmed };
-    setMessages((current) => [...current, userMessage]);
+    if (!trimmed || isLoading) return;
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: Date.now(),
+        sender: 'customer',
+        text: trimmed,
+      },
+    ]);
+
     setInput('');
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://community-impact-planner-ai.onrender.com/api/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ message: trimmed }),
       });
 
       const data = await response.json();
-      const replyText = data.reply || 'I am not sure how to answer that yet.';
 
-      const botMessage = {
-        id: Date.now() + 1,
-        sender: 'bot',
-        text: replyText,
-      };
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to answer your question.');
+      }
 
-      setMessages((current) => [...current, botMessage]);
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: data.reply || 'I am not sure how to answer that yet.',
+        },
+      ]);
 
       if (data.type === 'complaint-prompt') {
-        setComplaintForm((current) => ({ ...current, description: trimmed }));
+        setComplaintForm((current) => ({
+          ...current,
+          description: trimmed,
+        }));
       }
     } catch (error) {
+      console.error('Chat request failed:', error);
+
       setMessages((current) => [
         ...current,
         {
           id: Date.now() + 2,
           sender: 'bot',
-          text: 'Sorry, I was unable to answer that right now. Please try again.',
+          text:
+            error.message ||
+            'Sorry, I was unable to answer that right now. Please try again.',
         },
       ]);
     } finally {
@@ -106,19 +170,26 @@ function App() {
     }
   };
 
+  // Submit a new customer complaint.
   const handleComplaintSubmit = async (event) => {
     event.preventDefault();
+
     if (!complaintForm.description.trim()) {
-      setComplaintError('Please provide a complaint description before submitting.');
+      setComplaintError(
+        'Please provide a complaint description before submitting.'
+      );
       return;
     }
 
     setComplaintError('');
+    setIsSavingComplaint(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}https://community-impact-planner-ai.onrender.com/api/complaints`, {
+      const response = await fetch(`${API_BASE_URL}/api/complaints`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           customerName: complaintForm.customerName,
           customerContact: complaintForm.customerContact,
@@ -127,9 +198,9 @@ function App() {
       });
 
       const data = await response.json();
+
       if (!response.ok) {
-        setComplaintError(data.error || 'Unable to record the complaint.');
-        return;
+        throw new Error(data.error || 'Unable to record the complaint.');
       }
 
       setMessages((current) => [
@@ -137,25 +208,59 @@ function App() {
         {
           id: Date.now(),
           sender: 'bot',
-          text: `Your complaint has been recorded. Reference ID: ${data.referenceId}. It is now visible in the business dashboard and is currently marked as Open.`,
+          text: `Your complaint has been recorded successfully. Reference ID: ${data.referenceId}. Its status is Open.`,
         },
       ]);
+
       setComplaintForm(emptyComplaint);
       await fetchComplaints();
     } catch (error) {
-      setComplaintError('The complaint could not be saved. Please try again.');
+      console.error('Complaint submission failed:', error);
+
+      setComplaintError(
+        error.message || 'The complaint could not be saved. Please try again.'
+      );
+    } finally {
+      setIsSavingComplaint(false);
     }
   };
 
+  // Update an existing complaint's status.
   const handleStatusChange = async (complaintId, nextStatus) => {
-    const response = await fetch(`${API_BASE_URL}https://community-impact-planner-ai.onrender.com/api/complaints/${complaintId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: nextStatus }),
-    });
+    if (!complaintId || isUpdatingStatus) return;
 
-    if (response.ok) {
+    setComplaintError('');
+    setIsUpdatingStatus(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/complaints/${complaintId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: nextStatus }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Unable to update complaint status.'
+        );
+      }
+
       await fetchComplaints();
+    } catch (error) {
+      console.error('Status update failed:', error);
+
+      setComplaintError(
+        error.message || 'Unable to update complaint status.'
+      );
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -183,20 +288,35 @@ function App() {
 
           <div className="suggestions">
             {defaultSuggestions.map((suggestion) => (
-              <button key={suggestion} type="button" onClick={() => setInput(suggestion)}>
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => setInput(suggestion)}
+              >
                 {suggestion}
               </button>
             ))}
           </div>
 
-          <div className="chat-thread">
+          <div className="chat-thread" aria-live="polite">
             {messages.map((message) => (
-              <div key={message.id} className={`message ${message.sender}`}>
-                <span>{message.sender === 'bot' ? 'SmartCare' : 'Customer'}</span>
+              <div
+                key={message.id}
+                className={`message ${message.sender}`}
+              >
+                <span>
+                  {message.sender === 'bot' ? 'SmartCare' : 'Customer'}
+                </span>
                 <p>{message.text}</p>
               </div>
             ))}
-            {isLoading && <div className="message bot"><span>SmartCare</span><p>Thinking…</p></div>}
+
+            {isLoading && (
+              <div className="message bot">
+                <span>SmartCare</span>
+                <p>Thinking…</p>
+              </div>
+            )}
           </div>
 
           <form
@@ -211,48 +331,78 @@ function App() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="Ask about a product or submit a complaint"
+              aria-label="Ask SmartCare a question"
             />
+
             <button type="submit" disabled={isLoading}>
-              Send
+              {isLoading ? 'Sending…' : 'Send'}
             </button>
           </form>
 
-          <form className="complaint-form" onSubmit={handleComplaintSubmit}>
+          <form
+            className="complaint-form"
+            onSubmit={handleComplaintSubmit}
+          >
             <h3>Record a complaint</h3>
+
             <label>
               Customer name
               <input
                 type="text"
                 value={complaintForm.customerName}
                 onChange={(event) =>
-                  setComplaintForm((current) => ({ ...current, customerName: event.target.value }))
+                  setComplaintForm((current) => ({
+                    ...current,
+                    customerName: event.target.value,
+                  }))
                 }
+                placeholder="Enter your name"
               />
             </label>
+
             <label>
               Contact details
               <input
                 type="text"
                 value={complaintForm.customerContact}
                 onChange={(event) =>
-                  setComplaintForm((current) => ({ ...current, customerContact: event.target.value }))
+                  setComplaintForm((current) => ({
+                    ...current,
+                    customerContact: event.target.value,
+                  }))
                 }
+                placeholder="Phone number or email"
               />
             </label>
+
             <label>
               Complaint description
               <textarea
                 value={complaintForm.description}
                 onChange={(event) =>
-                  setComplaintForm((current) => ({ ...current, description: event.target.value }))
+                  setComplaintForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
                 }
-                rows="4"
-                placeholder="I received a damaged backpack."
+                rows={4}
+                placeholder="Describe the problem you experienced."
+                required
               />
             </label>
-            {complaintError && <p className="error-text">{complaintError}</p>}
-            <button type="submit" className="secondary-button">
-              Record complaint
+
+            {complaintError && (
+              <p className="error-text" role="alert">
+                {complaintError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="secondary-button"
+              disabled={isSavingComplaint}
+            >
+              {isSavingComplaint ? 'Saving…' : 'Record complaint'}
             </button>
           </form>
         </section>
@@ -263,6 +413,14 @@ function App() {
               <p className="panel-label">Owner dashboard</p>
               <h2>Customer follow-up</h2>
             </div>
+
+            <button
+              type="button"
+              onClick={fetchComplaints}
+              disabled={isUpdatingStatus}
+            >
+              Refresh
+            </button>
           </div>
 
           <div className="dashboard-list">
@@ -273,17 +431,31 @@ function App() {
                 <button
                   key={complaint.referenceId}
                   type="button"
-                  className={`complaint-card ${selectedComplaint?.referenceId === complaint.referenceId ? 'selected' : ''}`}
-                  onClick={() => setSelectedComplaintId(complaint.referenceId)}
+                  className={`complaint-card ${selectedComplaintId === complaint.referenceId
+                      ? 'selected'
+                      : ''
+                    }`}
+                  onClick={() =>
+                    setSelectedComplaintId(complaint.referenceId)
+                  }
                 >
                   <div className="complaint-card-header">
                     <strong>{complaint.referenceId}</strong>
-                    <span className={`status-badge status-${complaint.status.toLowerCase().replace(/\s+/g, '-')}`}>
+
+                    <span
+                      className={`status-badge status-${complaint.status
+                        .toLowerCase()
+                        .replace(/\s+/g, '-')}`}
+                    >
                       {complaint.status}
                     </span>
                   </div>
+
                   <p>{complaint.description}</p>
-                  <small>{new Date(complaint.createdAt).toLocaleDateString()}</small>
+
+                  <small>
+                    {new Date(complaint.createdAt).toLocaleDateString()}
+                  </small>
                 </button>
               ))
             )}
@@ -293,20 +465,31 @@ function App() {
             <div className="complaint-detail">
               <div className="detail-header">
                 <h3>{selectedComplaint.referenceId}</h3>
-                <span className={`status-badge status-${selectedComplaint.status.toLowerCase().replace(/\s+/g, '-')}`}>
+
+                <span
+                  className={`status-badge status-${selectedComplaint.status
+                    .toLowerCase()
+                    .replace(/\s+/g, '-')}`}
+                >
                   {selectedComplaint.status}
                 </span>
               </div>
 
               <p>
-                <strong>Name:</strong> {selectedComplaint.customerName || 'Anonymous'}
+                <strong>Name:</strong>{' '}
+                {selectedComplaint.customerName || 'Anonymous'}
               </p>
+
               <p>
-                <strong>Contact:</strong> {selectedComplaint.customerContact || 'Not provided'}
+                <strong>Contact:</strong>{' '}
+                {selectedComplaint.customerContact || 'Not provided'}
               </p>
+
               <p>
-                <strong>Date:</strong> {new Date(selectedComplaint.createdAt).toLocaleString()}
+                <strong>Date:</strong>{' '}
+                {new Date(selectedComplaint.createdAt).toLocaleString()}
               </p>
+
               <p>
                 <strong>Issue:</strong> {selectedComplaint.description}
               </p>
@@ -315,13 +498,25 @@ function App() {
                 Update status
                 <select
                   value={selectedComplaint.status}
-                  onChange={(event) => handleStatusChange(selectedComplaint.id, event.target.value)}
+                  disabled={isUpdatingStatus}
+                  onChange={(event) =>
+                    handleStatusChange(
+                      selectedComplaint.id,
+                      event.target.value
+                    )
+                  }
                 >
                   <option value="Open">Open</option>
                   <option value="In Progress">In Progress</option>
                   <option value="Resolved">Resolved</option>
                 </select>
               </label>
+
+              {complaintError && (
+                <p className="error-text" role="alert">
+                  {complaintError}
+                </p>
+              )}
             </div>
           )}
         </aside>
