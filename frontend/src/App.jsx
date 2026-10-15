@@ -355,8 +355,10 @@ function App() {
             <input type="text" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask about a product or submit a complaint" aria-label="Ask SmartCare a question" />
             <button type="submit" disabled={isLoading}>{isLoading ? 'Sending…' : 'Send'}</button>
           </form>
-          <section className="complaint-tracker">
-            <h3>Track Your Complaint</h3>
+      
+          <section className="complaint-station">
+            <h3>Customer Complaint Station</h3>
+            <section className="complaint-tracker">
             <p>Enter your complaint reference and the contact details you used when submitting it.</p>
 
             <form onSubmit={handleTrackComplaint}>
@@ -390,7 +392,10 @@ function App() {
                 {isTrackingComplaint ? 'Checking status…' : 'Track complaint'}
               </button>
             </form>
+            </section> 
 
+            
+    
             {trackedComplaint && (
               <div className="complaint-status" role="status">
                 <h4>Complaint Status</h4>
