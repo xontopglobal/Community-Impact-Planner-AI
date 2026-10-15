@@ -290,9 +290,10 @@ function App() {
       </header>
       <main className="main-grid">
         <section className="panel customer-panel">
-          <div className="panel-header">
-            <div><p className="panel-label">Customer view</p><h2>Community Impact Planner AI</h2></div>
-          </div>
+          
+            <div>
+              <p className="panel-label">Customer view</p>
+            </div>
           <div className="suggestions">
             {defaultSuggestions.map((suggestion) => (
               <button key={suggestion} type="button" onClick={() => setInput(suggestion)}>{suggestion}</button>
