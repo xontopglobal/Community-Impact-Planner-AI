@@ -165,7 +165,7 @@ async function initDatabase() {
     console.log('SmartCare product catalogue initialized.');
   }
 
-  console.log('SmartCare Supply Co. database initialized.');
+  console.log('SmartCare AI database initialized.');
 }
 
 async function getProducts() {
@@ -378,7 +378,7 @@ app.post('/api/ratings', async (req, res) => {
     );
 
     return res.status(201).json({
-      message: 'Thank you for rating SmartCare Supply Co.!',
+      message: 'Thank you for rating SmartCare AI!',
       rating: result.rows[0],
     });
   } catch (error) {
@@ -440,7 +440,7 @@ app.post('/api/chat', async (req, res) => {
     return res.json({
       type: 'complaint-prompt',
       reply:
-        'I am sorry you experienced this problem. Please complete the complaint form below so SmartCare Supply Co. can record it for follow-up.',
+        'I am sorry you experienced this problem. Please complete the complaint form below so SmartCare AI can record it for follow-up.',
       products: [],
     });
   }
@@ -593,7 +593,7 @@ async function startServer() {
       console.log(
         `SmartCare AI backend running on port ${port}`
       );
-      console.log('Business: SmartCare Supply Co.');
+      console.log('Business: SmartCare AI.');
     });
 
     server.on('error', (error) => {
