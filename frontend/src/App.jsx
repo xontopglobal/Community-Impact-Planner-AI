@@ -32,6 +32,11 @@ function App() {
   const [complaintForm, setComplaintForm] = useState(emptyComplaint);
   const [complaintError, setComplaintError] = useState('');
   const [complaintSuccess, setComplaintSuccess] = useState('');
+  const [trackingReference, setTrackingReference] = useState('');
+  const [trackingContact, setTrackingContact] = useState('');
+  const [trackedComplaint, setTrackedComplaint] = useState(null);
+  const [trackingError, setTrackingError] = useState('');
+  const [isTrackingComplaint, setIsTrackingComplaint] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingComplaint, setIsSavingComplaint] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -58,7 +63,45 @@ function App() {
     }
   }, []);
 
+  const handleTrackComplaint = async (event) => {
+    event.preventDefault();
 
+    const referenceId = trackingReference.trim();
+    const customerContact = trackingContact.trim();
+
+    if (!referenceId || !customerContact) {
+      setTrackingError('Enter your complaint reference and contact details.');
+      setTrackedComplaint(null);
+      return;
+    }
+
+    setIsTrackingComplaint(true);
+    setTrackingError('');
+    setTrackedComplaint(null);
+
+    try {
+      const params = new URLSearchParams({
+        referenceId,
+        customerContact,
+      });
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/complaints/track?${params.toString()}`
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to check complaint status.');
+      }
+
+      setTrackedComplaint(data.complaint);
+    } catch (error) {
+      setTrackingError(error.message || 'Unable to check complaint status.');
+    } finally {
+      setIsTrackingComplaint(false);
+    }
+  };
   const fetchRatings = useCallback(async () => {
     setIsLoadingRatings(true);
 
@@ -312,6 +355,61 @@ function App() {
             <input type="text" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask about a product or submit a complaint" aria-label="Ask SmartCare a question" />
             <button type="submit" disabled={isLoading}>{isLoading ? 'Sending…' : 'Send'}</button>
           </form>
+          <section className="complaint-tracker">
+            <h3>Track Your Complaint</h3>
+            <p>Enter your complaint reference and the contact details you used when submitting it.</p>
+
+            <form onSubmit={handleTrackComplaint}>
+              <label>
+                Complaint reference
+                <input
+                  type="text"
+                  value={trackingReference}
+                  onChange={(event) => setTrackingReference(event.target.value)}
+                  placeholder="e.g. SC-20261015-XZWPF3"
+                  required
+                />
+              </label>
+
+              <label>
+                Phone number or email
+                <input
+                  type="text"
+                  value={trackingContact}
+                  onChange={(event) => setTrackingContact(event.target.value)}
+                  placeholder="Enter your complaint contact details"
+                  required
+                />
+              </label>
+
+              {trackingError && (
+                <p className="error-text" role="alert">{trackingError}</p>
+              )}
+
+              <button type="submit" className="secondary-button" disabled={isTrackingComplaint}>
+                {isTrackingComplaint ? 'Checking status…' : 'Track complaint'}
+              </button>
+            </form>
+
+            {trackedComplaint && (
+              <div className="complaint-status" role="status">
+                <h4>Complaint Status</h4>
+                <p>
+                  Reference: <strong>{trackedComplaint.referenceId}</strong>
+                </p>
+                <p>
+                  Status: <strong>{trackedComplaint.status}</strong>
+                </p>
+                {trackedComplaint.updatedAt && (
+                  <p>
+                    Last updated: {new Date(trackedComplaint.updatedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+
+
           <form className="complaint-form" onSubmit={handleComplaintSubmit}>
             <h3>Record a complaint</h3>
             <label>Customer name

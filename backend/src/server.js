@@ -326,6 +326,51 @@ app.get('/api/products', async (req, res) => {
     });
   }
 });
+// Track a complaint using its reference number and customer contact.
+app.get('/api/complaints/track', async (req, res) => {
+  const referenceId = sanitizeText(req.query.referenceId || '');
+  const customerContact = sanitizeText(req.query.customerContact || '');
+
+  if (!referenceId || !customerContact) {
+    return res.status(400).json({
+      error: 'Complaint reference and contact details are required.',
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT reference_id, status, created_at, updated_at
+       FROM complaints
+       WHERE reference_id = $1
+         AND LOWER(TRIM(customer_contact)) = LOWER(TRIM($2))
+       LIMIT 1`,
+      [referenceId, customerContact]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'No matching complaint found. Check your reference and contact details.',
+      });
+    }
+
+    const complaint = result.rows[0];
+
+    return res.json({
+      complaint: {
+        referenceId: complaint.reference_id,
+        status: complaint.status,
+        createdAt: complaint.created_at,
+        updatedAt: complaint.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error('Unable to track complaint:', error);
+    return res.status(500).json({
+      error: 'Unable to check complaint status right now.',
+    });
+  }
+});
+
 
 // Retrieve saved customer complaints.
 app.get('/api/complaints', async (req, res) => {
