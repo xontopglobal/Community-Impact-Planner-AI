@@ -301,6 +301,13 @@ function containsComplaintIntent(message) {
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    platform: 'SmartCare AI',
+  });
+});
+
 
 // Business information
 app.get('/api/business', (req, res) => {
