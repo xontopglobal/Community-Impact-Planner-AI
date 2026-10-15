@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import './App.css';
 
+
 const API_BASE_URL = (
   import.meta.env.VITE_API_URL ||
   'https://community-impact-planner-ai.onrender.com'
 ).replace(/\/+$/, '');
+
 
 const defaultSuggestions = [
   'Which product would you recommend for someone looking for a durable school backpack, and how much does it cost?',
@@ -16,7 +18,7 @@ const emptyComplaint = { customerName: '', customerContact: '', description: '' 
 
 function App() {
   const [business, setBusiness] = useState({
-    name: 'SmartCare Supply Co.',
+    name: 'SmartCare AI',
     welcome: 'Explore our products, discover recommendations, and get customer support.',
   });
   const [messages, setMessages] = useState([{
@@ -29,9 +31,21 @@ function App() {
   const [selectedComplaintId, setSelectedComplaintId] = useState('');
   const [complaintForm, setComplaintForm] = useState(emptyComplaint);
   const [complaintError, setComplaintError] = useState('');
+  const [complaintSuccess, setComplaintSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingComplaint, setIsSavingComplaint] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [ratingFeedback, setRatingFeedback] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [ratingMessage, setRatingMessage] = useState('');
+  const [ratings, setRatings] = useState([]);
+  const [ratingSummary, setRatingSummary] = useState({
+    total: 0,
+    average: 0,
+  });
+  const [isLoadingRatings, setIsLoadingRatings] = useState(false);
+
 
   const fetchBusiness = useCallback(async () => {
     try {
@@ -44,6 +58,66 @@ function App() {
     }
   }, []);
 
+
+  const fetchRatings = useCallback(async () => {
+    setIsLoadingRatings(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/ratings`);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to load ratings.');
+      }
+
+      setRatings(data.ratings || []);
+      setRatingSummary(data.summary || { total: 0, average: 0 });
+    } catch (error) {
+      console.error('Error fetching ratings:', error);
+    } finally {
+      setIsLoadingRatings(false);
+    }
+  }, []);
+
+  const handleRatingSubmit = async (event) => {
+    event.preventDefault();
+
+    if (rating < 1 || rating > 5) {
+      setRatingMessage('Please select a star rating from 1 to 5.');
+      return;
+    }
+
+    setIsSubmittingRating(true);
+    setRatingMessage('');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/ratings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rating,
+          feedback: ratingFeedback,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to submit your rating.');
+      }
+
+      setRatingMessage('Thank you for rating our service!');
+      setRating(0);
+      setRatingFeedback('');
+      await fetchRatings();
+    } catch (error) {
+      setRatingMessage(error.message || 'Unable to submit your rating. Please try again.');
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
 
   const fetchComplaints = useCallback(async () => {
     try {
@@ -93,6 +167,7 @@ function App() {
 
     setIsSavingComplaint(true);
     setComplaintError('');
+    setComplaintSuccess('');
 
     try {
       const response = await fetch(
@@ -119,8 +194,16 @@ function App() {
 
       setComplaintForm(emptyComplaint);
       setComplaintError('');
+      setComplaintSuccess(
+        `Your complaint has been submitted successfully${data.referenceId ? `. Reference: ${data.referenceId}` : '.'
+        }`
+      );
 
-      await fetchComplaints();
+
+      fetchComplaints().catch((error) => {
+        console.error('Unable to refresh complaints:', error);
+      });
+
     } catch (error) {
       console.error('Error saving complaint:', error);
       setComplaintError(
@@ -134,7 +217,9 @@ function App() {
 
   useEffect(() => {
     fetchBusiness();
-  }, [fetchBusiness]);
+    fetchRatings();
+  }, [fetchBusiness, fetchRatings]);
+
 
   const selectedComplaint = complaints.find(
     (complaint) => complaint.referenceId === selectedComplaintId
@@ -206,7 +291,7 @@ function App() {
       <main className="main-grid">
         <section className="panel customer-panel">
           <div className="panel-header">
-            <div><p className="panel-label">Customer view</p><h2>SmartCare AI</h2></div>
+            <div><p className="panel-label">Customer view</p><h2>Community Impact Planner AI</h2></div>
           </div>
           <div className="suggestions">
             {defaultSuggestions.map((suggestion) => (
@@ -216,11 +301,11 @@ function App() {
           <div className="chat-thread" aria-live="polite">
             {messages.map((message) => (
               <div key={message.id} className={`message ${message.sender}`}>
-                <span>{message.sender === 'bot' ? 'SmartCare' : 'Customer'}</span>
+                <span>{message.sender === 'bot' ? 'SmartCare AI' : 'Customer'}</span>
                 <p>{message.text}</p>
               </div>
             ))}
-            {isLoading && <div className="message bot"><span>SmartCare</span><p>Thinking…</p></div>}
+            {isLoading && <div className="message bot"><span>SmartCare AI</span><p>Thinking…</p></div>}
           </div>
           <form className="chat-form" onSubmit={(event) => { event.preventDefault(); handleQuestionSubmit(input); }}>
             <input type="text" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask about a product or submit a complaint" aria-label="Ask SmartCare a question" />
@@ -238,46 +323,113 @@ function App() {
               <textarea value={complaintForm.description} onChange={(event) => setComplaintForm((current) => ({ ...current, description: event.target.value }))} rows={4} placeholder="Describe the problem you experienced." required />
             </label>
             {complaintError && <p className="error-text" role="alert">{complaintError}</p>}
+            {complaintSuccess && <p className="success-text" role="status">{complaintSuccess}</p>}
             <button type="submit" className="secondary-button" disabled={isSavingComplaint}>{isSavingComplaint ? 'Saving…' : 'Record complaint'}</button>
           </form>
+
         </section>
-        <aside className="panel dashboard-panel">
+
+        <section className="panel rating-panel">
           <div className="panel-header">
-            <div><p className="panel-label">Owner dashboard</p><h2>Customer follow-up</h2></div>
-            <button type="button" onClick={fetchComplaints} disabled={isUpdatingStatus}>Refresh</button>
+            <div>
+              <p className="panel-label">Customer feedback</p>
+              <h2>Rate Your SmartCare AI Experience</h2>
+            </div>
           </div>
-          <div className="dashboard-list">
-            {complaints.length === 0 ? <p className="empty-state">No complaints yet.</p> : complaints.map((complaint) => (
-              <button key={complaint.referenceId} type="button" className={`complaint-card ${selectedComplaintId === complaint.referenceId ? 'selected' : ''}`} onClick={() => setSelectedComplaintId(complaint.referenceId)}>
-                <div className="complaint-card-header">
-                  <strong>{complaint.referenceId}</strong>
-                  <span className={`status-badge status-${String(complaint.status || 'Open').toLowerCase().replace(/\s+/g, '-')}`}>{complaint.status || 'Open'}</span>
-                </div>
-                <p>{complaint.description}</p>
-                <small>{complaint.createdAt ? new Date(complaint.createdAt).toLocaleDateString() : ''}</small>
-              </button>
-            ))}
+
+          <div className="rating-summary">
+            <strong>
+              {Number(ratingSummary.average || 0).toFixed(1)} / 5
+            </strong>
+            <span aria-label={`${ratingSummary.average} out of 5 stars`}>
+              {'★'.repeat(Math.round(Number(ratingSummary.average || 0)))}
+              {'☆'.repeat(5 - Math.round(Number(ratingSummary.average || 0)))}
+            </span>
+            <p>
+              {isLoadingRatings
+                ? 'Loading ratings…'
+                : ratingSummary.total === 0
+                  ? 'No customer ratings yet. Be the first to rate us!'
+                  : `Based on ${ratingSummary.total} ${ratingSummary.total === 1 ? 'rating' : 'ratings'}`}
+            </p>
           </div>
-          {selectedComplaint && (
-            <div className="complaint-detail">
-              <div className="detail-header">
-                <h3>{selectedComplaint.referenceId}</h3>
-                <span className={`status-badge status-${String(selectedComplaint.status || 'Open').toLowerCase().replace(/\s+/g, '-')}`}>{selectedComplaint.status || 'Open'}</span>
+
+          <form className="rating-form" onSubmit={handleRatingSubmit}>
+            <fieldset disabled={isSubmittingRating}>
+              <legend>How would you rate your experience?</legend>
+
+              <div className="star-selector">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    className={star <= rating ? 'star active' : 'star'}
+                    onClick={() => {
+                      setRating(star);
+                      setRatingMessage('');
+                    }}
+                    aria-label={`${star} ${star === 1 ? 'star' : 'stars'}`}
+                    aria-pressed={rating === star}
+                  >
+                    {star <= rating ? '★' : '☆'}
+                  </button>
+                ))}
               </div>
-              <p><strong>Name:</strong> {selectedComplaint.customerName || 'Anonymous'}</p>
-              <p><strong>Contact:</strong> {selectedComplaint.customerContact || 'Not provided'}</p>
-              <p><strong>Date:</strong> {selectedComplaint.createdAt ? new Date(selectedComplaint.createdAt).toLocaleString() : 'Not available'}</p>
-              <p><strong>Issue:</strong> {selectedComplaint.description}</p>
-              <label>Update status
-                <select value={selectedComplaint.status || 'Open'} disabled={isUpdatingStatus} onChange={(event) => handleStatusChange(selectedComplaint.id, event.target.value)}>
-                  <option value="Open">Open</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Resolved">Resolved</option>
-                </select>
-              </label>
-              {complaintError && <p className="error-text" role="alert">{complaintError}</p>}
+            </fieldset>
+
+            <label htmlFor="rating-feedback">
+              Optional feedback
+            </label>
+            <textarea
+              id="rating-feedback"
+              value={ratingFeedback}
+              onChange={(event) => setRatingFeedback(event.target.value)}
+              placeholder="Tell us what went well or what we can improve."
+              rows={3}
+              maxLength={1000}
+              disabled={isSubmittingRating}
+            />
+
+            {ratingMessage && (
+              <p role="status" className="rating-message">
+                {ratingMessage}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="secondary-button"
+              disabled={isSubmittingRating}
+            >
+              {isSubmittingRating ? 'Submitting…' : 'Submit Rating'}
+            </button>
+          </form>
+
+          {ratings.some((item) => item.feedback) && (
+            <div className="rating-reviews">
+              <h3>Recent feedback</h3>
+              {ratings
+                .filter((item) => item.feedback)
+                .slice(0, 3)
+                .map((item) => (
+                  <article key={item.id} className="rating-review">
+                    <p className="review-stars" aria-label={`${item.rating} out of 5 stars`}>
+                      {'★'.repeat(item.rating)}
+                      {'☆'.repeat(5 - item.rating)}
+                    </p>
+                    <p>{item.feedback}</p>
+                    <small>
+                      {item.created_at
+                        ? new Date(item.created_at).toLocaleDateString()
+                        : ''}
+                    </small>
+                  </article>
+                ))}
             </div>
           )}
+        </section>
+
+        <aside className="panel dashboard-panel">
         </aside>
       </main>
     </div>
